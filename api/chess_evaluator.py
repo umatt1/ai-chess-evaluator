@@ -12,28 +12,48 @@ class ChessEvaluator:
         Use GPT-3.5-turbo-instruct to evaluate a chess position and return a numerical score.
         Positive scores favor white, negative scores favor black.
         """
-        prompt = f"""Analyze this chess position in FEN notation: {fen}
-        
-        Consider material balance, piece positions, king safety, and pawn structure.
-        Return ONLY a single number between -10 and 10 representing the position evaluation.
-        Positive numbers favor white, negative numbers favor black.
-        0 means equal position.
-        10 means white is winning decisively.
-        -10 means black is winning decisively.
-        
-        Evaluation:"""
+        prompt = f"""You are a chess position evaluator. Given a chess position in FEN notation, you must analyze it and return ONLY a numerical evaluation between -10 and 10.
 
-        response = openai.Completion.create(
-            model="gpt-3.5-turbo-instruct",
-            prompt=prompt,
-            max_tokens=10,
-            temperature=0.3
-        )
+Rules for evaluation:
+1. Positive numbers favor white, negative numbers favor black
+2. Each pawn is worth 1 point
+3. Knights and Bishops are worth 3 points
+4. Rooks are worth 5 points
+5. Queens are worth 9 points
+6. Consider piece positions:
+   - Pieces controlling the center are better (+0.5)
+   - Knights on the rim are worse (-0.3)
+   - Rooks on open files are better (+0.5)
+   - Bishops with good diagonals are better (+0.3)
+7. Consider pawn structure:
+   - Doubled pawns (-0.5)
+   - Isolated pawns (-0.3)
+   - Central pawns (+0.3)
+8. Consider king safety:
+   - Exposed king (-1.0)
+   - Good pawn shield (+0.5)
+
+Position in FEN: {fen}
+
+Provide ONLY a number between -10 and 10 as your response. Example responses: 0.5, -1.2, 3.0
+
+Evaluation:"""
 
         try:
-            evaluation = float(response['choices'][0]['text'].strip())
+            response = openai.Completion.create(
+                model="gpt-3.5-turbo-instruct",
+                prompt=prompt,
+                max_tokens=10,
+                temperature=0.2
+            )
+            
+            result = response['choices'][0]['text'].strip()
+            # Remove any non-numeric characters except decimal point and minus sign
+            result = ''.join(c for c in result if c.isdigit() or c in '.-')
+            evaluation = float(result)
             return max(min(evaluation, 10), -10)  # Ensure within bounds
-        except ValueError:
+        except Exception as e:
+            print(f"GPT evaluation error: {str(e)}. Response: {response['choices'][0]['text'] if 'choices' in response else 'No response'}")
             return 0.0  # Default to neutral if parsing fails
 
     def _get_moves_and_resulting_positions(self, board: chess.Board) -> List[Tuple[chess.Move, str]]:
