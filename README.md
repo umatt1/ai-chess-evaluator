@@ -1,88 +1,102 @@
-# Chess Position Evaluator API
+# LLM Chess
 
-A Django REST API for evaluating chess positions using FEN notation and GPT-3.5-turbo-instruct for position analysis.
+A chess engine that uses GPT to evaluate positions and play chess at a high level.
 
-## Setup
+## Features
 
-1. Create a virtual environment:
+- Position evaluation using GPT-3.5
+- Recursive search with alpha-beta pruning
+- Web interface for playing against the engine
+- Detailed position analysis and move explanation
+
+## Installation
+
+1. Clone the repository:
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+git clone https://github.com/yourusername/llm-chess.git
+cd llm-chess
 ```
 
-2. Install dependencies:
+2. Create and activate virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run migrations:
+4. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your OpenAI API key
+```
+
+5. Run migrations:
 ```bash
 python manage.py migrate
 ```
 
-4. Start the development server:
+## Usage
+
+1. Start the development server:
 ```bash
 python manage.py runserver
 ```
 
-## API Endpoints
+2. Open `http://localhost:8000/api/play/` in your browser
+3. Start a new game and play against the engine!
+
+## API Documentation
 
 ### Evaluate Position
-
-**Endpoint**: `POST /api/evaluate/`
-
-Evaluates a chess position using GPT-3.5-turbo-instruct with recursive depth analysis.
-
-**Request Body**:
-```json
+```
+POST /api/evaluate/
 {
-    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    "depth": 2,
-    "openai_api_key": "your-api-key-here"
+    "fen": "<FEN string>",
+    "depth": <search depth>,
+    "openai_api_key": "<your API key>"
 }
 ```
 
-**Parameters**:
-- `fen`: FEN string representing the chess position
-- `depth`: Depth of recursive analysis (1-3)
-  - depth=1: Evaluates only the current position
-  - depth=2: Evaluates current position and all possible moves
-  - depth=3: Evaluates current position, all possible moves, and opponent's responses
-- `openai_api_key`: Your OpenAI API key
-
-**Response**:
-```json
+### Get Bot Move
+```
+POST /api/move/
 {
-    "evaluation": 0.2,
-    "best_move": "e2e4",
-    "all_lines": [
-        {
-            "move": "e2e4",
-            "evaluation": 0.2,
-            "lines": [
-                {
-                    "move": "e7e5",
-                    "evaluation": -0.1,
-                    "lines": []
-                }
-            ]
-        }
-    ],
-    "depth": 2,
-    "original_position": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    "fen": "<FEN string>",
+    "depth": <search depth>,
+    "openai_api_key": "<your API key>"
 }
 ```
 
-**Evaluation Scale**:
-- Range: -10 to 10
-- Positive values favor white
-- Negative values favor black
-- 0 indicates an equal position
-- ±10 indicates a decisive advantage
+## Development
 
-## Error Handling
+### Project Structure
+```
+llm-chess/
+├── api/
+│   ├── chess/          # Chess logic
+│   ├── views/          # API views
+│   ├── utils/          # Utilities
+│   └── templates/      # HTML templates
+├── tests/              # Test suite
+└── requirements.txt    # Dependencies
+```
 
-- Invalid FEN string: 400 Bad Request
-- Invalid depth: 400 Bad Request
-- Invalid or missing API key: 400 Bad Request
-- Server errors: 500 Internal Server Error
+### Running Tests
+```bash
+python manage.py test
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
