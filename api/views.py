@@ -9,6 +9,9 @@ import chess
 class ChessGameView(TemplateView):
     template_name = 'api/chess_game.html'
 
+class PositionEvaluatorView(TemplateView):
+    template_name = 'api/position_evaluator.html'
+
 class GetBotMoveView(APIView):
     def post(self, request):
         serializer = ChessPositionSerializer(data=request.data)
