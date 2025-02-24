@@ -69,6 +69,9 @@ TEMPLATES = [
     },
 ]
 
+# Add CSRF trusted origins for development
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000']
+
 WSGI_APPLICATION = 'chess_evaluator.wsgi.application'
 
 

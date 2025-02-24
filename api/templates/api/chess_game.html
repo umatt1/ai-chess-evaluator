@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Play Chess Against GPT</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #board {
+            margin: 20px 0;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #api-key-form {
+            margin: 20px 0;
+        }
+        #api-key {
+            padding: 8px;
+            width: 300px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Play Chess Against GPT</h1>
+        
+        <div id="api-key-form">
+            <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+            <button class="button" onclick="setApiKey()">Set API Key</button>
+        </div>
+
+        <div id="board"></div>
+        
+        <div class="status" id="status">
+            Welcome! You play as White. Enter your OpenAI API key to start.
+        </div>
+        
+        <div class="controls">
+            <button class="button" onclick="newGame()" id="newGameBtn">New Game</button>
+            <button class="button" onclick="undoMove()" id="undoBtn">Undo Move</button>
+            <select id="depth" class="button">
+                <option value="2" selected>Depth 2 (Recommended)</option>
+                <option value="3">Depth 3 (Stronger)</option>
+                <option value="1">Depth 1 (Weak)</option>
+            </select>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    
+    <script>
+        let board = null;
+        let game = new Chess();
+        let apiKey = '';
+        let userColor = 'w';
+        let isThinking = false;
+
+        function setApiKey() {
+            apiKey = document.getElementById('api-key').value;
+            document.getElementById('status').innerText = 'API Key set. You can start a new game!';
+            document.getElementById('newGameBtn').disabled = false;
+        }
+
+        function onDragStart(source, piece, position, orientation) {
+            if (isThinking || game.game_over() || 
+                (game.turn() !== userColor) || 
+                piece.search(userColor) === -1) {
+                return false;
+            }
+        }
+
+        async function onDrop(source, target) {
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+
+            if (move === null) return 'snapback';
+
+            updateStatus();
+            await makeComputerMove();
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        async function makeComputerMove() {
+            if (game.game_over()) {
+                console.log('Game is over, not making move');
+                return;
+            }
+
+            isThinking = true;
+            const statusElement = document.getElementById('status');
+            statusElement.innerText = 'GPT is thinking...';
+
+            try {
+                console.log('Current FEN:', game.fen());
+                console.log('Current turn:', game.turn());
+                console.log('Legal moves:', game.moves({ verbose: true }));
+
+                const depth = document.getElementById('depth').value;
+                console.log('Requesting move with depth:', depth);
+
+                const response = await fetch('/api/get_move/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fen: game.fen(),
+                        depth: parseInt(depth),
+                        openai_api_key: apiKey
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Received response:', data);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (!data.best_move) {
+                    throw new Error('No move received from server');
+                }
+
+                // Convert the move string (e.g., 'e2e4') to a move object
+                const moveObj = {
+                    from: data.best_move.substring(0, 2),
+                    to: data.best_move.substring(2, 4),
+                    promotion: data.best_move.length > 4 ? data.best_move[4] : undefined
+                };
+
+                console.log('Attempting to make move:', moveObj);
+
+                // Make the move
+                const move = game.move(moveObj);
+                if (move === null) {
+                    throw new Error('Invalid move received from server: ' + data.best_move);
+                }
+
+                console.log('Move made successfully');
+
+                // Update the board
+                board.position(game.fen());
+                updateStatus();
+
+                // Add evaluation to status
+                const evalText = data.evaluation > 0 ? `+${data.evaluation.toFixed(1)}` : 
+                                data.evaluation < 0 ? data.evaluation.toFixed(1) : '0.0';
+                statusElement.innerText += ` (Evaluation: ${evalText})`;
+
+            } catch (error) {
+                console.error('Error in makeComputerMove:', error);
+                statusElement.innerText = 'Error: ' + error.message;
+                // If there's an error, enable the user to try again
+                isThinking = false;
+            } finally {
+                isThinking = false;
+            }
+        }
+
+        function updateStatus() {
+            let status = '';
+
+            if (game.in_checkmate()) {
+                status = game.turn() === 'w' ? 'Game Over - Black Wins!' : 'Game Over - White Wins!';
+            } else if (game.in_draw()) {
+                status = 'Game Over - Draw!';
+            } else {
+                status = game.turn() === 'w' ? 'White to move' : 'Black to move';
+                if (game.in_check()) {
+                    status += ' (In Check)';
+                }
+            }
+
+            document.getElementById('status').innerText = status;
+        }
+
+        function newGame() {
+            if (!apiKey) {
+                document.getElementById('status').innerText = 'Please set your API key first!';
+                return;
+            }
+            game = new Chess();
+            board.position('start');
+            updateStatus();
+        }
+
+        function undoMove() {
+            if (isThinking) return;
+            game.undo(); // Undo computer's move
+            game.undo(); // Undo player's move
+            board.position(game.fen());
+            updateStatus();
+        }
+
+        window.onload = function() {
+            board = Chessboard('board', {
+                draggable: true,
+                position: 'start',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+            });
+            document.getElementById('newGameBtn').disabled = true;
+        };
+    </script>
+</body>
+</html>
